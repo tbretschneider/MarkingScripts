@@ -65,6 +65,7 @@ def existing_course_menu(selected_course):
     print("2) Mark new assignment (mark.py)")
     print("3) Attach comments to marked PDFs (attach_comments.py)")
     print("4) Upload marked work (upload_latest_assignment.py)")
+    print("5) Generate report (generate_report.py)")
     print("B) Back")
     choice = input("Choose: ").strip().lower()
     if choice == '1':
@@ -75,6 +76,8 @@ def existing_course_menu(selected_course):
         run_script('attach_comments.py', selected_course)
     elif choice == '4':
         run_script('upload_latest_assignment.py', selected_course)
+    elif choice == '5':
+        run_script('generate_summary.py', selected_course)
     else:
         return
 

@@ -213,6 +213,9 @@ def make_latex_document(title: str, subtitle: str, feedback: str, overall_latex:
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
 \usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
 \geometry{margin=1in}
 \pagestyle{empty}
 \begin{document}
