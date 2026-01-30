@@ -25,6 +25,58 @@ def parse_args():
     )
     return parser.parse_args()
 
+def normalise_pdf_to_a4(
+    input_pdf: Path,
+    output_pdf: Path,
+) -> bool:
+    """
+    Normalise a PDF to A4 and sensible image resolution using Ghostscript.
+    Returns True on success, False on failure.
+    """
+    cmd = [
+        "gs",
+        "-sDEVICE=pdfwrite",
+        "-dCompatibilityLevel=1.4",
+        "-dSAFER",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-dDetectDuplicateImages=true",
+        "-dCompressFonts=true",
+        "-dSubsetFonts=true",
+        "-dAutoRotatePages=/None",
+        "-dFIXEDMEDIA",
+        "-dPDFFitPage",
+        "-sPAPERSIZE=a4",
+        "-dDownsampleColorImages=true",
+        "-dColorImageResolution=300",
+        "-dColorImageDownsampleType=/Bicubic",
+        "-dDownsampleGrayImages=true",
+        "-dGrayImageResolution=300",
+        "-dGrayImageDownsampleType=/Bicubic",
+        "-dDownsampleMonoImages=true",
+        "-dMonoImageResolution=600",
+        "-dMonoImageDownsampleType=/Subsample",
+        f"-sOutputFile={output_pdf}",
+        str(input_pdf),
+    ]
+
+    print("Running Ghostscript:", " ".join(cmd))
+
+    res = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    if res.returncode != 0:
+        print("Ghostscript failed:")
+        print(res.stderr)
+        return False
+
+    return True
+
+
 def sanitize_name(name: str):
     return re.sub(r"[^A-Za-z0-9_\-]", '_', name.replace(' ', '_'))
 
@@ -158,6 +210,10 @@ def main():
     students = read_students(course_dir)
     remote_template = info.get('onedrive_remote','')
 
+    raw_dir = course_dir / "RAW_SUBMISSIONS"
+    raw_dir.mkdir(exist_ok=True)
+
+
     for s in students:
         remote = remote_template.replace('{name}', s)
         print('\nProcessing student:', s)
@@ -190,25 +246,44 @@ def main():
         #        print('Move failed or was skipped; will attempt to use original filename.')
 
         # sync remote to local student folder
+        # sync remote to local student folder
         local_student_dir = course_dir / 'OnedriveFolder' / s
         local_student_dir.mkdir(parents=True, exist_ok=True)
         src_remote = f"{remote}/"
         dst_local = str(local_student_dir)
-        rclone_sync(src_remote,dst_local)
-        # Find the latest PDF in the local student folder (by mtime)
+        rclone_sync(src_remote, dst_local)
+
+        # Rename synced file to canonical name if needed
+        final_pdf = local_student_dir / expected_name
         if latest_name != expected_name:
             src_local = local_student_dir / latest_name
-            dst_local_path = local_student_dir / expected_name
+            print(f"Renaming local file: {src_local.name} -> {expected_name}")
+            src_local.rename(final_pdf)
+        else:
+            final_pdf = local_student_dir / expected_name
 
-                # Now rename/move the freshly-synced file to the expected name
-            print(f"Renaming local file: {src_local.name} -> {dst_local_path.name}")
-            src_local.replace(dst_local_path)  # atomic move/rename
+        # Move raw submission to central RAW_SUBMISSIONS folder
+        raw_pdf = raw_dir / expected_name
+        print(f"Stashing raw PDF for {s}")
+        final_pdf.rename(raw_pdf)
+
+        # Normalise PDF back into the student folder
+        print(f"Normalising PDF for {s}")
+        ok = normalise_pdf_to_a4(
+            input_pdf=raw_pdf,
+            output_pdf=final_pdf,
+        )
+
+        if not ok:
+            print(f"⚠️  Normalisation failed for {s}; restoring original")
+            raw_pdf.rename(final_pdf)
 
         # record submission time as the ModTime we found (if available) or blank
         submission_time_str = modtime.isoformat() if modtime else ''
         with grades_file.open('a', newline='') as gf:
             writer = csv.writer(gf)
             writer.writerow([s, submission_time_str, '', '', ''])
+
     print('Done. Grades file:', grades_file)
 
 if __name__ == '__main__':
