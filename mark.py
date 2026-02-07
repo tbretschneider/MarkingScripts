@@ -219,7 +219,9 @@ def ensure_student_marked_folder(course_dir: Path, student_name: str) -> Path:
 
 def open_in_xournalpp(path: Path):
     try:
-        proc = subprocess.Popen(['xournalpp', str(path)])
+        proc = subprocess.Popen(['xournalpp', str(path)],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
     except FileNotFoundError:
         print("xournalpp not found: please annotate the file manually. Press Enter when ready to continue.")
         proc = None
